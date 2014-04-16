@@ -9,6 +9,9 @@
 #import "PTBlockEventListener.h"
 
 @interface PTBlockEventListener : NSObject <PTEventListener>
+
+@property (nonatomic,readonly) BOOL invalid;
+@property (nonatomic,copy) PTBlockEventListenerBlock block;
 @end
 
 @implementation PTBlockEventListener {
@@ -47,8 +50,8 @@
 - (void)dispatchEvent:(PTPusherEvent *)event
 {
   dispatch_async(_queue, ^{
-    if (!_invalid) {
-      _block(event);
+    if (!self.invalid) {
+      self.block(event);
     }
   });
 }

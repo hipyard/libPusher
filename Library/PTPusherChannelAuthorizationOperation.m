@@ -107,16 +107,26 @@
   _completionHandler = completionHandler;
 }
 
+- (void (^)(id))completionHandler
+{
+    return _completionHandler;
+}
+
 - (void)main
 {
   // we complete after a tiny delay, to simulate the asynchronous nature
   // of channel authorization. The low priorty queue ensures any polling
   // in the test (which probably use the main queue/thread is not broken.
   
+    __weak typeof(self)weakMe = self;
+    
   double delayInSeconds = 0.1;
   dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, delayInSeconds * NSEC_PER_SEC);
   dispatch_after(popTime, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^(void){
-    _completionHandler(self);
+      
+      typeof(self)me = weakMe;
+      
+      me.completionHandler(self);
   });
 }
 

@@ -21,6 +21,7 @@ NSString *const PTPusherConnectionPongEvent        = @"pusher:pong";
 @property (nonatomic, assign) PTPusherConnectionState state;
 @property (nonatomic, strong) NSTimer *pingTimer;
 @property (nonatomic, strong) NSTimer *pongTimer;
+@property (nonatomic, readonly, strong) id<PTPusherConnectionDelegate> strongDelegate;
 @end
 
 @implementation PTPusherConnection {
@@ -57,6 +58,11 @@ NSString *const PTPusherConnectionPongEvent        = @"pusher:pong";
   [socket close];
 }
 
+- (id<PTPusherConnectionDelegate>)strongDelegate
+{
+    return self.delegate;
+}
+
 - (BOOL)isConnected
 {
   return (self.state == PTPusherConnectionConnected);
@@ -73,7 +79,7 @@ NSString *const PTPusherConnectionPongEvent        = @"pusher:pong";
 {
   if (self.state >= PTPusherConnectionConnecting) return;
   
-  BOOL shouldConnect = [self.delegate pusherConnectionWillConnect:self];
+  BOOL shouldConnect = [self.strongDelegate pusherConnectionWillConnect:self];
   
   if (!shouldConnect) return;
   
@@ -123,7 +129,7 @@ NSString *const PTPusherConnectionPongEvent        = @"pusher:pong";
   socket = nil;
   
   // we always call this last, to prevent a race condition if the delegate calls 'connect'
-  [self.delegate pusherConnection:self didFailWithError:error wasConnected:wasConnected];
+  [self.strongDelegate pusherConnection:self didFailWithError:error wasConnected:wasConnected];
 }
 
 - (void)webSocket:(SRWebSocket *)webSocket didCloseWithCode:(NSInteger)code reason:(NSString *)reason wasClean:(BOOL)wasClean
@@ -136,7 +142,7 @@ NSString *const PTPusherConnectionPongEvent        = @"pusher:pong";
   socket = nil;
   
   // we always call this last, to prevent a race condition if the delegate calls 'connect'
-  [self.delegate pusherConnection:self didDisconnectWithCode:(NSInteger)code reason:(NSString *)reason wasClean:wasClean];
+  [self.strongDelegate pusherConnection:self didDisconnectWithCode:(NSInteger)code reason:(NSString *)reason wasClean:wasClean];
 }
 
 - (void)webSocket:(SRWebSocket *)webSocket didReceiveMessage:(NSString *)message
@@ -157,10 +163,10 @@ NSString *const PTPusherConnectionPongEvent        = @"pusher:pong";
     self.socketID = (event.data)[@"socket_id"];
     self.state = PTPusherConnectionConnected;
     
-    [self.delegate pusherConnectionDidConnect:self];
+    [self.strongDelegate pusherConnectionDidConnect:self];
   }
   
-  [self.delegate pusherConnection:self didReceiveEvent:event];
+  [self.strongDelegate pusherConnection:self didReceiveEvent:event];
 }
 
 #pragma mark - Ping/Pong/Activity Timeouts

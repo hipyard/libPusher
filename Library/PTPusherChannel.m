@@ -256,8 +256,8 @@
   
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-  NSLog(@"willAuthorizeChannelWithRequest: is deprecated and will be removed in 1.6. Use pusher:willAuthorizeChannel:withRequest: instead.");
   if ([self.strongPusherDelegate respondsToSelector:@selector(pusher:willAuthorizeChannelWithRequest:)]) { // deprecated call
+      NSLog(@"willAuthorizeChannelWithRequest: is deprecated and will be removed in 1.6. Use pusher:willAuthorizeChannel:withRequest: instead.");
       NSMutableURLRequest* req = authOperation.mutableURLRequest;
     [self.strongPusherDelegate pusher:self.strongPusher willAuthorizeChannelWithRequest:req];
   }

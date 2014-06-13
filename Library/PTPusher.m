@@ -82,13 +82,15 @@ NSURL *PTPusherConnectionURL(NSString *host, NSString *key, NSString *clientID, 
 - (id)initWithConnection:(PTPusherConnection *)connection
 {
   if (self = [super init]) {
+      
     dispatcher = [[PTPusherEventDispatcher alloc] init];
     channels = [[NSMutableDictionary alloc] init];
     
     authorizationQueue = [[NSOperationQueue alloc] init];
     authorizationQueue.maxConcurrentOperationCount = 5;
     authorizationQueue.name = @"com.pusher.libPusher.authorizationQueue";
-    
+      
+    self.canReconnect = YES;
     self.connection = connection;
     self.connection.delegate = self;
     self.reconnectDelay = kPTPusherDefaultReconnectDelay;
@@ -379,7 +381,7 @@ NSURL *PTPusherConnectionURL(NSString *host, NSString *key, NSString *clientID, 
     }
   }
   else {
-    [self handleDisconnection:connection error:error reconnectMode:PTPusherAutoReconnectModeReconnectWithConfiguredDelay];
+      [self handleDisconnection:connection error:error reconnectMode: self.canReconnect ? PTPusherAutoReconnectModeReconnectWithConfiguredDelay : PTPusherAutoReconnectModeNoReconnect];
   }
 }
 

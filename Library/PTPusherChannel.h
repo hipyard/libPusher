@@ -90,6 +90,8 @@
  ssent to the server.
  */
 - (void)unsubscribe;
+- (NSUInteger)numberOfBindings;
+
 
 @end
 

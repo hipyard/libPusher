@@ -68,6 +68,7 @@ typedef enum {
  normally need to change this.
  */
 @property (nonatomic, assign) NSTimeInterval pongTimeout;
+@property (nonatomic, assign) BOOL canReconnect;
 
 ///------------------------------------------------------------------------------------/
 /// @name Initialisation

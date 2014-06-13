@@ -90,6 +90,8 @@ extern NSString *const PTPusherErrorUnderlyingEventKey;
  */
 @property (nonatomic, assign) NSTimeInterval reconnectDelay;
 
+@property (nonatomic,assign) BOOL canReconnect;
+
 /** The connection object for this client.
  
  Each instance uses a single connection only. Most clients will likely only ever need a single

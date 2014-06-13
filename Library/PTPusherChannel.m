@@ -177,6 +177,19 @@
   }
 }
 
+- (NSUInteger)numberOfBindings
+{
+    NSUInteger count = 0;
+    for (NSArray *bindingsArray in [self.dispatcher.bindings allValues]) {
+        for (PTPusherEventBinding *binding in bindingsArray) {
+            if (![self.internalBindings containsObject:binding]) {
+                count++;
+            }
+        }
+    }
+    return count;
+}
+
 #pragma mark - Dispatching events
 
 - (void)dispatchEvent:(PTPusherEvent *)event

@@ -8,7 +8,7 @@ Pusher is a hosted service that sits between your web application and the browse
 
 The libPusher API mirrors the Pusher Javascript client as closely as possible, with some allowances for Objective-C conventions. In particular, whilst the Javascript client uses event binding for all event handling, where events are pre-defined, libPusher uses the standard Cocoa delegation pattern.
 
-[API Documentation](http://lukeredpath.github.io/libPusher/html/index.html)
+[API Documentation](http://cocoadocs.org/docsets/libPusher/1.5/)
 
 ## Example
 Subscribe to the ```chat``` channel and bind to the ```new-message``` event.
@@ -31,7 +31,7 @@ PTPusherChannel *channel = [self.client subscribeToChannelNamed:@"chat"];
 Install using CocoaPods is recommended.
 
 ```ruby
-pod 'libPusher', '~> 1.5'
+pod 'libPusher', '~> 1.6'
 ```
 
 Import Pusher into the class that wants to make use of the library.
@@ -41,6 +41,16 @@ Import Pusher into the class that wants to make use of the library.
 ```
 
 A step-by-step guide on how to [install and setup CocoaPods]() to use libPusher without using CocoaPods is available on the wiki.
+
+If you want to use the ReactiveExtensions version of libPusher, add the following line to your Podfile instead.
+
+```ruby
+pod 'libPusher/ReactiveExtensions', '~> 1.6'
+```
+
+This will also load the core libPusher library and ReactiveCocoa as a dependency.
+
+If you are not using CocoaPods, you can simply drop the extensions into your project.
 
 ## Usage
 
@@ -131,7 +141,7 @@ Private and presence channels require server-side authorisation before they can 
 In order to connect to a private or presence channel, you first need to configure your server authorisation URL.
 
 ```objc
-self.client.authorizationURL = [NSURL URLWithString:@"http://www.yourserver.com/authorise"];
+self.client.authorizationURL = [NSURL URLWithString:@"https://www.yourserver.com/authorise"];
 ```
 
 When you attempt to connect to a private or presence channel, libPusher will make a form-encoded POST request to the above URL, passing along the ```socket_id``` and ```channel_name``` as parameters. Prior to sending the request, the Pusher delegate will be notified, passing in the channel and the NSMutableURLRequest instance that will be sent.

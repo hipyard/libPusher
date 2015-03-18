@@ -19,32 +19,18 @@
 @interface PTPusher ()
 - (void)__unsubscribeFromChannel:(PTPusherChannel *)channel;
 - (void)beginAuthorizationOperation:(PTPusherChannelAuthorizationOperation *)operation;
-@property (nonatomic, strong, readonly) id<PTPusherDelegate> strongDelegate;
 @end
 
 @interface PTPusherChannel ()
 @property (nonatomic, weak) PTPusher *pusher;
-@property (nonatomic, strong, readonly) PTPusher *strongPusher;
-@property (nonatomic, strong, readonly) id<PTPusherDelegate> strongPusherDelegate;
 @property (nonatomic, strong) PTPusherEventDispatcher *dispatcher;
 @property (nonatomic, assign, readwrite) BOOL subscribed;
 @property (nonatomic, readonly) NSMutableArray *internalBindings;
-
 @end
 
 #pragma mark -
 
 @implementation PTPusherChannel
-
-- (PTPusher*)strongPusher
-{
-    return self.pusher;
-}
-
-- (id<PTPusherDelegate>)strongPusherDelegate
-{
-    return self.strongPusher.strongDelegate;
-}
 
 + (id)channelWithName:(NSString *)name pusher:(PTPusher *)pusher
 {
@@ -72,20 +58,18 @@
      Using a target-action binding will create a retain cycle between the channel
      and the target/action binding object.
      */
-      __weak typeof(self)weakMe = self;
-
+    __weak PTPusherChannel *weakChannel = self;
+    
     [self.internalBindings addObject:
      [self bindToEventNamed:@"pusher_internal:subscription_succeeded" 
             handleWithBlock:^(PTPusherEvent *event) {
-                typeof(self)me = weakMe;
-              [me handleSubscribeEvent:event];
+              [weakChannel handleSubscribeEvent:event];
             }]];
     
     [self.internalBindings addObject:
      [self bindToEventNamed:@"subscription_error" 
             handleWithBlock:^(PTPusherEvent *event) {
-                typeof(self)me = weakMe;
-              [me handleSubcribeErrorEvent:event];
+              [weakChannel handleSubcribeErrorEvent:event];
             }]];
   }
   return self;
@@ -93,7 +77,6 @@
 
 - (void)dealloc 
 {
-    
   [self.internalBindings enumerateObjectsUsingBlock:^(id object, NSUInteger index, BOOL *stop) {
     [self.dispatcher removeBinding:object];
   }];
@@ -115,17 +98,17 @@
 {
   self.subscribed = YES;
   
-  if ([self.strongPusherDelegate respondsToSelector:@selector(pusher:didSubscribeToChannel:)]) {
-    [self.strongPusherDelegate pusher:self.pusher didSubscribeToChannel:self];
+  if ([self.pusher.delegate respondsToSelector:@selector(pusher:didSubscribeToChannel:)]) {
+    [self.pusher.delegate pusher:self.pusher didSubscribeToChannel:self];
   }
 }
 
 - (void)handleSubcribeErrorEvent:(PTPusherEvent *)event
 {
-  if ([self.strongPusherDelegate respondsToSelector:@selector(pusher:didFailToSubscribeToChannel:withError:)]) {
+  if ([self.pusher.delegate respondsToSelector:@selector(pusher:didFailToSubscribeToChannel:withError:)]) {
     NSDictionary *userInfo = @{PTPusherErrorUnderlyingEventKey: event};
     NSError *error = [NSError errorWithDomain:PTPusherErrorDomain code:PTPusherSubscriptionError userInfo:userInfo];
-    [self.strongPusherDelegate pusher:self.pusher didFailToSubscribeToChannel:self withError:error];
+    [self.pusher.delegate pusher:self.pusher didFailToSubscribeToChannel:self withError:error];
   }
 }
 
@@ -208,14 +191,14 @@
 {
   if (self.isSubscribed) return;
   
-  [self.strongPusher sendEventNamed:@"pusher:subscribe"
+  [self.pusher sendEventNamed:@"pusher:subscribe"
                     data:@{@"channel": self.name}
                  channel:nil];
 }
 
 - (void)unsubscribe
 {
-  [self.strongPusher __unsubscribeFromChannel:self];
+  [self.pusher __unsubscribeFromChannel:self];
 }
 
 - (void)handleDisconnect
@@ -261,27 +244,17 @@
 
 - (void)authorizeWithCompletionHandler:(void(^)(BOOL, NSDictionary *, NSError *))completionHandler
 {
-  PTPusherChannelAuthorizationOperation *authOperation = [PTPusherChannelAuthorizationOperation operationWithAuthorizationURL:self.strongPusher.authorizationURL channelName:self.name socketID:self.strongPusher.connection.socketID];
+  PTPusherChannelAuthorizationOperation *authOperation = [PTPusherChannelAuthorizationOperation operationWithAuthorizationURL:self.pusher.authorizationURL channelName:self.name socketID:self.pusher.connection.socketID];
   
   [authOperation setCompletionHandler:^(PTPusherChannelAuthorizationOperation *operation) {
     completionHandler(operation.isAuthorized, operation.authorizationData, operation.error);
   }];
-  
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-  if ([self.strongPusherDelegate respondsToSelector:@selector(pusher:willAuthorizeChannelWithRequest:)]) { // deprecated call
-      NSLog(@"willAuthorizeChannelWithRequest: is deprecated and will be removed in 1.6. Use pusher:willAuthorizeChannel:withRequest: instead.");
-      NSMutableURLRequest* req = authOperation.mutableURLRequest;
-    [self.strongPusherDelegate pusher:self.strongPusher willAuthorizeChannelWithRequest:req];
-  }
-#pragma clang diagnostic pop
     
-  if ([self.strongPusherDelegate respondsToSelector:@selector(pusher:willAuthorizeChannel:withRequest:)]) {
-      NSMutableURLRequest* req = authOperation.mutableURLRequest;
-    [self.strongPusherDelegate pusher:self.strongPusher willAuthorizeChannel:self withRequest:req];
+  if ([self.pusher.delegate respondsToSelector:@selector(pusher:willAuthorizeChannel:withRequest:)]) {
+    [self.pusher.delegate pusher:self.pusher willAuthorizeChannel:self withRequest:authOperation.mutableURLRequest];
   }
   
-  [self.strongPusher beginAuthorizationOperation:authOperation];
+  [self.pusher beginAuthorizationOperation:authOperation];
 }
 
 - (void)subscribeWithAuthorization:(NSDictionary *)authData
@@ -291,7 +264,7 @@
   NSMutableDictionary *eventData = [authData mutableCopy];
   eventData[@"channel"] = self.name;
   
-  [self.strongPusher sendEventNamed:@"pusher:subscribe"
+  [self.pusher sendEventNamed:@"pusher:subscribe"
                     data:eventData
                  channel:nil];
 }
@@ -307,8 +280,7 @@
   __weak PTPusherChannel *weakSelf = self;
   
   [_clientEventQueue addOperationWithBlock:^{
-      typeof(self)me = (PTPusherPrivateChannel*)weakSelf;
-    [me.strongPusher sendEventNamed:eventName data:eventData channel:me.name];
+    [weakSelf.pusher sendEventNamed:eventName data:eventData channel:weakSelf.name];
   }];
 }
 
@@ -325,20 +297,9 @@
 - (PTPusherChannelMember *)handleMemberAdded:(NSDictionary *)memberData;
 - (PTPusherChannelMember *)handleMemberRemoved:(NSDictionary *)memberData;
 
-
-
-@end
-
-@interface PTPusherPresenceChannel ()
-@property (nonatomic, strong,readonly) id<PTPusherPresenceChannelDelegate> strongPresenceDelegate;
 @end
 
 @implementation PTPusherPresenceChannel
-
-- (id<PTPusherPresenceChannelDelegate>)strongPresenceDelegate
-{
-    return self.presenceDelegate;
-}
 
 - (id)initWithName:(NSString *)channelName pusher:(PTPusher *)aPusher
 {
@@ -353,15 +314,13 @@
     [self.internalBindings addObject:
      [self bindToEventNamed:@"pusher_internal:member_added" 
             handleWithBlock:^(PTPusherEvent *event) {
-                PTPusherPresenceChannel* me = weakChannel;
-              [me handleMemberAddedEvent:event];
+              [weakChannel handleMemberAddedEvent:event];
             }]];
     
     [self.internalBindings addObject:
      [self bindToEventNamed:@"pusher_internal:member_removed" 
             handleWithBlock:^(PTPusherEvent *event) {
-                PTPusherPresenceChannel* me = weakChannel;
-              [me handleMemberRemovedEvent:event];
+              [weakChannel handleMemberRemovedEvent:event];
             }]];
     
   }
@@ -385,22 +344,8 @@
 - (void)handleSubscribeEvent:(PTPusherEvent *)event
 {
   [super handleSubscribeEvent:event];
-  
   [self.members handleSubscription:event.data];
-  
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-  if ([self.strongPresenceDelegate respondsToSelector:@selector(presenceChannel:didSubscribeWithMemberList:)]) { // deprecated call
-    NSLog(@"presenceChannel:didSubscribeWithMemberList: is deprecated and will be removed in 1.6. Use presenceChannelDidSubscribe: instead.");
-    NSMutableArray *members = [NSMutableArray arrayWithCapacity:self.members.count];
-    [self.members enumerateObjectsUsingBlock:^(id obj, BOOL *stop) {
-      [members addObject:obj];
-    }];
-    [self.strongPresenceDelegate presenceChannel:self didSubscribeWithMemberList:members];
-  }
-#pragma clang diagnostic pop
-
-  [self.strongPresenceDelegate presenceChannelDidSubscribe:self];
+  [self.presenceDelegate presenceChannelDidSubscribe:self];
 }
 
 - (BOOL)isPresence
@@ -408,54 +353,18 @@
   return YES;
 }
 
-- (NSDictionary *)infoForMemberWithID:(NSString *)memberID
-{
-  return self.members[memberID];
-}
-
-- (NSArray *)memberIDs
-{
-  NSMutableArray *memberIDs = [NSMutableArray array];
-  [self.members enumerateObjectsUsingBlock:^(PTPusherChannelMember *member, BOOL *stop) {
-    [memberIDs addObject:member.userID];
-  }];
-  return memberIDs;
-}
-
-- (NSInteger)memberCount
-{
-  return self.members.count;
-}
-
 - (void)handleMemberAddedEvent:(PTPusherEvent *)event
 {
   PTPusherChannelMember *member = [self.members handleMemberAdded:event.data];
-  
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-  if ([self.strongPresenceDelegate respondsToSelector:@selector(presenceChannel:memberAddedWithID:memberInfo:)]) { // deprecated call
-    NSLog(@"presenceChannel:memberAddedWithID:memberInfo: is deprecated and will be removed in 1.6. Use presenceChannel:memberAdded: instead.");
-    [self.strongPresenceDelegate presenceChannel:self memberAddedWithID:member.userID memberInfo:member.userInfo];
-  }
-#pragma clang diagnostic pop
 
-  [self.strongPresenceDelegate presenceChannel:self memberAdded:member];
+  [self.presenceDelegate presenceChannel:self memberAdded:member];
 }
 
 - (void)handleMemberRemovedEvent:(PTPusherEvent *)event
 {
   PTPusherChannelMember *member = [self.members handleMemberRemoved:event.data];
-
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-  if ([self.strongPresenceDelegate respondsToSelector:@selector(presenceChannel:memberRemovedWithID:atIndex:)]) { // deprecated call
-    NSLog(@"presenceChannel:memberRemovedWithID:atIndex: is deprecated and will be removed in 1.6. Use presenceChannel:memberRemoved: instead.");
-    // we just send an index of -1 here: I don't want to jump through hoops to support a deprecated API call
-    [self.strongPresenceDelegate presenceChannel:self memberRemovedWithID:member.userID atIndex:-1];
-  }
-#pragma clang diagnostic pop
   
-  [self.strongPresenceDelegate presenceChannel:self memberRemoved:member];
+  [self.presenceDelegate presenceChannel:self memberRemoved:member];
 }
 
 @end
@@ -553,8 +462,7 @@
     
   [memberHash enumerateKeysAndObjectsUsingBlock:^(NSString *userID, NSDictionary *userInfo, BOOL *stop) {
     PTPusherChannelMember *member = [[PTPusherChannelMember alloc] initWithUserID:userID userInfo:userInfo];
-      typeof(self)me = weakMe;
-    me.members[userID] = member;
+    weakMe.members[userID] = member;
   }];
 }
 

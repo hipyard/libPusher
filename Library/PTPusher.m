@@ -51,7 +51,6 @@ NSURL *PTPusherConnectionURL(NSString *host, NSString *key, NSString *clientID, 
 
 @interface PTPusher ()
 @property (nonatomic, strong, readwrite) PTPusherConnection *connection;
-@property (nonatomic, strong, readonly) id<PTPusherDelegate> strongDelegate;
 @end
 
 #pragma mark -
@@ -64,25 +63,9 @@ NSURL *PTPusherConnectionURL(NSString *host, NSString *key, NSString *clientID, 
   NSMutableDictionary *channels;
 }
 
-- (id<PTPusherDelegate>)strongDelegate
-{
-    return self.delegate;
-}
-
-- (id)initWithConnection:(PTPusherConnection *)connection connectAutomatically:(BOOL)connectAutomatically
-{
-  if ((self = [self initWithConnection:connection])) {
-    if (connectAutomatically) {
-      [self connect];
-    }
-  }
-  return self;
-}
-
 - (id)initWithConnection:(PTPusherConnection *)connection
 {
   if (self = [super init]) {
-      
     dispatcher = [[PTPusherEventDispatcher alloc] init];
     channels = [[NSMutableDictionary alloc] init];
     
@@ -117,31 +100,23 @@ NSURL *PTPusherConnectionURL(NSString *host, NSString *key, NSString *clientID, 
 
 + (id)pusherWithKey:(NSString *)key delegate:(id<PTPusherDelegate>)delegate encrypted:(BOOL)isEncrypted
 {
-  NSURL *serviceURL = PTPusherConnectionURL(kPUSHER_HOST, key, @"libPusher", isEncrypted);
-  PTPusherConnection *connection = [[PTPusherConnection alloc] initWithURL:serviceURL];
-  PTPusher *pusher = [[self alloc] initWithConnection:connection];
-  pusher.delegate = delegate;
-  return pusher;
+  return [self pusherWithKey:(NSString *)key delegate:(id<PTPusherDelegate>)delegate encrypted:(BOOL)isEncrypted cluster:(NSString *) nil];
 }
 
-#pragma mark - Deprecated methods
-
-+ (id)pusherWithKey:(NSString *)key connectAutomatically:(BOOL)connectAutomatically
++ (id)pusherWithKey:(NSString *)key delegate:(id<PTPusherDelegate>)delegate encrypted:(BOOL)isEncrypted cluster:(NSString *) cluster
 {
-  PTPusher *client = [self pusherWithKey:key delegate:nil encrypted:YES];
-  if (connectAutomatically) {
-    [client connect];
-  }
-  return client;
-}
+    NSString * hostURL;
+    if ([cluster length] == 0) {
+        hostURL = kPUSHER_HOST;
+    } else {
+        hostURL = [NSString stringWithFormat:@"ws-%@.pusher.com", cluster];
+    }
 
-+ (id)pusherWithKey:(NSString *)key connectAutomatically:(BOOL)connectAutomatically encrypted:(BOOL)isEncrypted
-{
-  PTPusher *client = [self pusherWithKey:key delegate:nil encrypted:isEncrypted];
-  if (connectAutomatically) {
-    [client connect];
-  }
-  return client;
+    NSURL *serviceURL = PTPusherConnectionURL(hostURL, key, @"libPusher", isEncrypted);
+    PTPusherConnection *connection = [[PTPusherConnection alloc] initWithURL:serviceURL];
+    PTPusher *pusher = [[self alloc] initWithConnection:connection];
+    pusher.delegate = delegate;
+    return pusher;
 }
 
 - (void)dealloc;
@@ -263,20 +238,18 @@ NSURL *PTPusherConnectionURL(NSString *host, NSString *key, NSString *clientID, 
   
   [channels removeObjectForKey:channel.name];
   
-  if ([self.strongDelegate respondsToSelector:@selector(pusher:didUnsubscribeFromChannel:)]) {
-    [self.strongDelegate pusher:self didUnsubscribeFromChannel:channel];
+  if ([self.delegate respondsToSelector:@selector(pusher:didUnsubscribeFromChannel:)]) {
+    [self.delegate pusher:self didUnsubscribeFromChannel:channel];
   }
-}
-
-- (void)unsubscribeFromChannel:(PTPusherChannel *)channel
-{
-  [self __unsubscribeFromChannel:channel];
 }
 
 - (void)subscribeToChannel:(PTPusherChannel *)channel
 {
   [channel authorizeWithCompletionHandler:^(BOOL isAuthorized, NSDictionary *authData, NSError *error) {
     if (isAuthorized && self.connection.isConnected) {
+      if ([self.delegate respondsToSelector:@selector(pusher:authorizationPayloadFromResponseData:)]) {
+        authData = [self.delegate pusher:self authorizationPayloadFromResponseData:authData];
+      }    
       [channel subscribeWithAuthorization:authData];
     }
     else {
@@ -284,8 +257,8 @@ NSURL *PTPusherConnectionURL(NSString *host, NSString *key, NSString *clientID, 
         error = [NSError errorWithDomain:PTPusherErrorDomain code:PTPusherSubscriptionUnknownAuthorisationError userInfo:nil];
       }
       
-      if ([self.strongDelegate respondsToSelector:@selector(pusher:didFailToSubscribeToChannel:withError:)]) {
-        [self.strongDelegate pusher:self didFailToSubscribeToChannel:channel withError:error];
+      if ([self.delegate respondsToSelector:@selector(pusher:didFailToSubscribeToChannel:withError:)]) {
+        [self.delegate pusher:self didFailToSubscribeToChannel:channel withError:error];
       }
     }
   }];
@@ -331,8 +304,8 @@ NSURL *PTPusherConnectionURL(NSString *host, NSString *key, NSString *clientID, 
 
 - (BOOL)pusherConnectionWillConnect:(PTPusherConnection *)connection
 {
-  if ([self.strongDelegate respondsToSelector:@selector(pusher:connectionWillConnect:)]) {
-    return [self.strongDelegate pusher:self connectionWillConnect:connection];
+  if ([self.delegate respondsToSelector:@selector(pusher:connectionWillConnect:)]) {
+    return [self.delegate pusher:self connectionWillConnect:connection];
   }
   return YES;
 }
@@ -341,8 +314,8 @@ NSURL *PTPusherConnectionURL(NSString *host, NSString *key, NSString *clientID, 
 {
   _numberOfReconnectAttempts = 0;
   
-  if ([self.strongDelegate respondsToSelector:@selector(pusher:connectionDidConnect:)]) {
-    [self.strongDelegate pusher:self connectionDidConnect:connection];
+  if ([self.delegate respondsToSelector:@selector(pusher:connectionDidConnect:)]) {
+    [self.delegate pusher:self connectionDidConnect:connection];
   }
   
   [self subscribeAll];
@@ -391,8 +364,8 @@ NSURL *PTPusherConnectionURL(NSString *host, NSString *key, NSString *clientID, 
     [self handleDisconnection:connection error:error reconnectMode:PTPusherAutoReconnectModeReconnectImmediately];
   }
   else {
-    if ([self.strongDelegate respondsToSelector:@selector(pusher:connection:failedWithError:)]) {
-      [self.strongDelegate pusher:self connection:connection failedWithError:error];
+    if ([self.delegate respondsToSelector:@selector(pusher:connection:failedWithError:)]) {
+      [self.delegate pusher:self connection:connection failedWithError:error];
     }
   }
 }
@@ -400,8 +373,8 @@ NSURL *PTPusherConnectionURL(NSString *host, NSString *key, NSString *clientID, 
 - (void)pusherConnection:(PTPusherConnection *)connection didReceiveEvent:(PTPusherEvent *)event
 {
   if ([event isKindOfClass:[PTPusherErrorEvent class]]) {
-    if ([self.strongDelegate respondsToSelector:@selector(pusher:didReceiveErrorEvent:)]) {
-      [self.strongDelegate pusher:self didReceiveErrorEvent:(PTPusherErrorEvent *)event];
+    if ([self.delegate respondsToSelector:@selector(pusher:didReceiveErrorEvent:)]) {
+      [self.delegate pusher:self didReceiveErrorEvent:(PTPusherErrorEvent *)event];
     }
   }
   
@@ -424,30 +397,14 @@ NSURL *PTPusherConnectionURL(NSString *host, NSString *key, NSString *clientID, 
     [channel handleDisconnect];
   }
   
-  if ([self.strongDelegate respondsToSelector:@selector(pusher:connectionDidDisconnect:)]) { // deprecated call
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-    NSLog(@"pusher:connectionDidDisconnect: is deprecated and will be removed in 1.6. Use pusher:connection:didDisconnectWithError:willAttemptReconnect: instead.");
-    [self.strongDelegate pusher:self connectionDidDisconnect:connection];
-#pragma clang diagnostic pop
-  }
-
-  if ([self.strongDelegate respondsToSelector:@selector(pusher:connection:didDisconnectWithError:)]) { // deprecated call
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-    NSLog(@"pusher:connectionDidDisconnectWithError: is deprecated and will be removed in 1.6. Use pusher:connection:didDisconnectWithError:willAttemptReconnect: instead.");
-    [self.strongDelegate pusher:self connection:connection didDisconnectWithError:error];
-#pragma clang diagnostic pop
-  }
-  
   BOOL willReconnect = NO;
   
   if (reconnectMode > PTPusherAutoReconnectModeNoReconnect && _numberOfReconnectAttempts < _maximumNumberOfReconnectAttempts) {
     willReconnect = YES;
   }
     
-  if ([self.strongDelegate respondsToSelector:@selector(pusher:connection:didDisconnectWithError:willAttemptReconnect:)]) {
-    [self.strongDelegate pusher:self connection:connection didDisconnectWithError:error willAttemptReconnect:willReconnect];
+  if ([self.delegate respondsToSelector:@selector(pusher:connection:didDisconnectWithError:willAttemptReconnect:)]) {
+    [self.delegate pusher:self connection:connection didDisconnectWithError:error willAttemptReconnect:willReconnect];
   }
   
   if (willReconnect) {
@@ -483,8 +440,8 @@ NSURL *PTPusherConnectionURL(NSString *host, NSString *key, NSString *clientID, 
       break;
   }
   
-  if ([self.strongDelegate respondsToSelector:@selector(pusher:connectionWillAutomaticallyReconnect:afterDelay:)]) {
-    BOOL shouldProceed = [self.strongDelegate pusher:self connectionWillAutomaticallyReconnect:_connection afterDelay:delay];
+  if ([self.delegate respondsToSelector:@selector(pusher:connectionWillAutomaticallyReconnect:afterDelay:)]) {
+    BOOL shouldProceed = [self.delegate pusher:self connectionWillAutomaticallyReconnect:_connection afterDelay:delay];
     
     if (!shouldProceed) return;
   }
@@ -493,8 +450,7 @@ NSURL *PTPusherConnectionURL(NSString *host, NSString *key, NSString *clientID, 
     
   dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, delay * NSEC_PER_SEC);
   dispatch_after(popTime, dispatch_get_main_queue(), ^(void){
-      typeof(self)me = weakMe;
-    [me.connection connect];
+    [weakMe.connection connect];
   });
 }
 

@@ -6,7 +6,7 @@ require 'xcode_build/tasks/build_task'
 require 'xcode_build/formatters/progress_formatter'
 require 'tmpdir'
 
-LIBRARY_VERSION = "1.4"
+LIBRARY_VERSION = "1.6"
 XCODEBUILD_LOG  = File.join(File.dirname(__FILE__), "xcodebuild.log")
 GITHUB_USER     = 'lukeredpath'
 GITHUB_REPO     = 'libPusher'
@@ -119,6 +119,9 @@ require 'github/downloads'
 require 'osx_keychain'
 
 def upload_package_to_github(file)
+  puts "Skipping Github upload (no longer supported)"
+  return
+  
   keychain = OSXKeychain.new
   password = keychain['api.github.com', GITHUB_USER]
   uploader = Github::Downloads.connect(GITHUB_USER, password, GITHUB_REPO)
@@ -139,7 +142,6 @@ namespace :release do
     t.configuration = "Release"
     t.sdk = "iphoneos"
     t.formatter = XcodeBuild::Formatters::ProgressFormatter.new
-    t.arch = "'armv7 armv7s'"
     t.after_build { |build| copy_artefacts_from_build(build, :include_headers => true) }
     t.xcodebuild_log_path = XCODEBUILD_LOG
   end
@@ -149,7 +151,6 @@ namespace :release do
     t.scheme = "libPusher"
     t.configuration = "Release"
     t.sdk = "iphonesimulator"
-    t.arch = "i386"
     t.formatter = XcodeBuild::Formatters::ProgressFormatter.new
     t.after_build { |build| copy_artefacts_from_build(build) }
     t.xcodebuild_log_path = XCODEBUILD_LOG
